@@ -1,11 +1,15 @@
 import { defineStore } from 'pinia'
+import type { ProgramsName } from '~/types'
 
 interface State {
   appCloseType: 'close' | 'hide'
   appCloseTip: boolean
   autoStart: boolean
+  autoUpdate: boolean
+  isDevToolsOpen: boolean
+  defaultPrograms: ProgramsName
   isMenuCollapsed: boolean
-  imgLinkFormatVal: string[]
+
   themeAuto: boolean
   themeType: 'light' | 'dark' | null
 
@@ -22,8 +26,10 @@ export const useAppStore = defineStore(
       appCloseType: 'hide', // 关闭类型 'close' | 'hide'
       appCloseTip: false, // 是否显示关闭应用对话框
       autoStart: false, // 是否开机自启动
+      autoUpdate: false, // 是否自动更新
+      isDevToolsOpen: true, // 是否打开开发者工具
+      defaultPrograms: 'lskyPro', // 默认上传存储程序
       isMenuCollapsed: false, // 是否折叠菜单
-      imgLinkFormatVal: ['url', 'html', 'markdown', 'bbcode'], // 图片链接格式
 
       // 主题
       themeType: 'light', // 主题类型 'light' | 'dark'
@@ -39,7 +45,7 @@ export const useAppStore = defineStore(
      * @template T - State 的子类型
      * @param {Partial<T>} newState - 包含要设置的新状态的对象。这个对象的键应该是 State 的键，值的类型应该与 State 中对应键的类型匹配
      */
-    async function setState<T extends State>(newState: Partial<T>) {
+    function setState<T extends State>(newState: Partial<T>) {
       Object.assign(state, newState)
     }
 
@@ -55,9 +61,11 @@ export const useAppStore = defineStore(
         'appCloseType',
         'appCloseTip',
         'autoStart',
+        'isDevToolsOpen',
         'themeType',
         'themeAuto',
-        'imgLinkFormatVal',
+        'autoUpdate',
+        'defaultPrograms',
         'lastCallTimes',
       ],
     },

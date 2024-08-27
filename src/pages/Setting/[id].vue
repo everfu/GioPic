@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { NButton, NInput, NSelect } from 'naive-ui'
-import { useStorageListStore } from '~/stores'
-import type { StorageListName } from '~/types'
-import { getStorageName } from '~/utils'
+import { useProgramsStore } from '~/stores'
+import { getProgramsName } from '~/utils'
+import type { ProgramsName } from '~/types'
 
 const route = useRoute('/Setting/[id]')
-const id = ref(route.params.id as StorageListName)
-const storageListStore = useStorageListStore()
-const { storageList } = storeToRefs(storageListStore)
-
+const id = ref(route.params.id as ProgramsName)
+const programsStore = useProgramsStore()
 const api = ref('')
 const token = ref('')
 const strategiesVal = ref<number | null>(null)
+
+const settings = computed(() => programsStore.getPrograms(id.value))
 
 const settingOptions = computed(() => [
   {
@@ -53,13 +53,15 @@ const settingOptions = computed(() => [
             value: strategiesVal.value,
             onUpdateValue: (val: number) => {
               strategiesVal.value = val
+              saveSetting()
             },
-            options: getKeys(id.value).strategies,
+            options: settings.value.strategies,
           }),
           h(NButton, {
             onClick: async () => {
+              saveSetting()
               const loading = window.$message.loading('正在获取策略列表...')
-              if (!await storageListStore.getStrategies(id.value))
+              if (!await programsStore.getStrategies(id.value))
                 window.$message.error('获取策略列表失败，请检查设置是否填写有误')
               loading.destroy()
             },
@@ -72,35 +74,24 @@ const settingOptions = computed(() => [
   },
 ])
 
-function getKeys(type: StorageListName) {
-  const storageIndex = storageList.value.findIndex(item => item.id === type)
-  return storageList.value[storageIndex]
-}
-
 function saveSetting() {
-  getKeys(id.value).api = api.value
-  getKeys(id.value).token = token.value
-  getKeys(id.value).strategiesVal = strategiesVal.value
+  programsStore.setPrograms(id.value, 'api', api.value)
+  programsStore.setPrograms(id.value, 'token', token.value)
+  programsStore.setPrograms(id.value, 'strategiesVal', strategiesVal.value)
+  window.$message.success('保存成功')
 }
 
 watchEffect(() => {
-  id.value = route.params.id as StorageListName
-  api.value = getKeys(id.value).api
-  token.value = getKeys(id.value).token
-  strategiesVal.value = getKeys(id.value).strategiesVal
+  id.value = route.params.id as ProgramsName
+
+  api.value = settings.value.api
+  token.value = settings.value.token
+  strategiesVal.value = settings.value.strategiesVal
 })
 </script>
 
 <template>
   <div wh-full>
-    <SetItem ref="setItemRef" :title="`${getStorageName(id)}设置`" :items="settingOptions" style="padding-top: 0;" />
-    <n-flex justify="end" mt3>
-      <NButton type="primary" @click="saveSetting">
-        保存设置
-      </NButton>
-      <NButton type="error">
-        删除此存储
-      </NButton>
-    </n-flex>
+    <SetItem ref="setItemRef" :title="getProgramsName(id)" :items="settingOptions" style="padding-top: 0;" />
   </div>
 </template>

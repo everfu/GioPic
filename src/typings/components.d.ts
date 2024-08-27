@@ -7,7 +7,6 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
-    CreateStorageList: typeof import('./../components/Modal/CreateStorageList.vue')['default']
     FileList: typeof import('./../components/Upload/FileList.vue')['default']
     MainNav: typeof import('./../components/Nav/MainNav.vue')['default']
     Menu: typeof import('./../components/Global/Menu.vue')['default']
@@ -30,7 +29,6 @@ declare module 'vue' {
     NIcon: typeof import('naive-ui')['NIcon']
     NImage: typeof import('naive-ui')['NImage']
     NImageGroup: typeof import('naive-ui')['NImageGroup']
-    NInput: typeof import('naive-ui')['NInput']
     NLayout: typeof import('naive-ui')['NLayout']
     NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
     NLayoutSider: typeof import('naive-ui')['NLayoutSider']
@@ -40,14 +38,11 @@ declare module 'vue' {
     NModal: typeof import('naive-ui')['NModal']
     NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
     NP: typeof import('naive-ui')['NP']
-    NPopover: typeof import('naive-ui')['NPopover']
     NScrollbar: typeof import('naive-ui')['NScrollbar']
     NSelect: typeof import('naive-ui')['NSelect']
-    NSpace: typeof import('naive-ui')['NSpace']
+    NSkeleton: typeof import('naive-ui')['NSkeleton']
     NSpin: typeof import('naive-ui')['NSpin']
-    NStep: typeof import('naive-ui')['NStep']
-    NSteps: typeof import('naive-ui')['NSteps']
-    NTabPane: typeof import('naive-ui')['NTabPane']
+    NTab: typeof import('naive-ui')['NTab']
     NTabs: typeof import('naive-ui')['NTabs']
     NTag: typeof import('naive-ui')['NTag']
     NText: typeof import('naive-ui')['NText']

@@ -1,29 +1,26 @@
 <script setup lang="ts">
 import Logo from '~/assets/logo.svg'
 import { useAppStore } from '~/stores'
+import { renderIcon } from '~/utils'
 
 const appStroe = useAppStore()
 const { isMenuCollapsed, themeAuto, themeType } = storeToRefs(appStroe)
 const router = useRouter()
 
-function renderIcon(icon: string) {
-  return () => h('div', { class: `${icon} ` })
-}
-
 const themeOptions = computed(() => [
   {
-    label: themeType.value === 'light' ? '浅色模式' : '深色模式',
+    label: themeType.value === 'light' ? '深色模式' : '浅色模式',
     key: 'lightTodark',
-    icon: renderIcon(themeType.value === 'light' ? 'i-material-symbols-light-mode' : 'i-material-symbols-dark-mode'),
+    icon: renderIcon(themeType.value === 'light' ? 'i-ph-sun-bold' : 'i-ph-moon-stars-bold'),
   },
   {
     label: '程序设置',
     key: 'setting',
-    icon: renderIcon('i-material-symbols-settings-rounded'),
+    icon: renderIcon('i-ph-gear-six-bold'),
   },
 ])
 
-function handleThemeChange(key: string) {
+function themeChange(key: string) {
   switch (key) {
     case 'lightTodark': {
       themeType.value = themeType.value === 'dark' ? 'light' : 'dark'
@@ -59,22 +56,22 @@ function handleThemeChange(key: string) {
     <div flex="~" items-center style="-webkit-app-region: no-drag">
       <n-button :focusable="false" quaternary mr2 h8 w8 rounded-1.5 @click="router.go(-1)">
         <template #icon>
-          <div i-tabler-chevron-left />
+          <div i-ph-caret-left-bold />
         </template>
       </n-button>
       <n-button :focusable="false" quaternary h8 w8 @click="router.go(1)">
         <template #icon>
-          <div i-tabler-chevron-right />
+          <div i-ph-caret-right-bold />
         </template>
       </n-button>
     </div>
 
     <div mla flex="~" style="-webkit-app-region: no-drag">
       <div>
-        <n-dropdown :options="themeOptions" trigger="click" @select="handleThemeChange">
+        <n-dropdown :options="themeOptions" trigger="click" @select="themeChange">
           <n-button :focusable="false" quaternary h8 w8>
             <template #icon>
-              <div i-icon-park-outline-setting-two />
+              <div i-ph-gear-six-bold />
             </template>
           </n-button>
         </n-dropdown>

@@ -1,45 +1,69 @@
 <script setup lang="ts">
 import { NButton, NCheckbox } from 'naive-ui'
 import pLimit from 'p-limit'
-import { convertFileSize, getLinkType } from '~/utils'
+import { generateLink, getLinkTypeOptions, selectProgramsOptions } from '~/utils'
 import requestData from '~/api'
 import type { UploadData } from '~/stores'
-import { useAppStore, useStorageListStore, useUploadDataStore } from '~/stores'
+import type { ProgramsName } from '~/types'
+import { useAppStore, useProgramsStore, useUploadDataStore } from '~/stores'
+import debounce from '~/utils/debounce'
 
 const appStore = useAppStore()
-const storageListStore = useStorageListStore()
+const programsStore = useProgramsStore()
 const uploadDataStore = useUploadDataStore()
-const { imgLinkFormatVal, isImgListDelDialog } = storeToRefs(appStore)
-const { lskyProApi, lskyProToken, lskyProStrategiesVal } = storeToRefs(storageListStore)
+const { defaultPrograms, isImgListDelDialog } = storeToRefs(appStore)
 const { data } = storeToRefs(uploadDataStore)
-const imgLinkTabsKey = ref(0)
 const isAllPublic = ref(1)
 const isUpload = ref(false)
+const uploadProgramsId = ref(defaultPrograms.value)
 
 const isPublicOptions = [
   { label: '全部公开', value: 1 },
   { label: '全部私有', value: 0 },
 ]
 
+const programs = computed(() => programsStore.getPrograms(uploadProgramsId.value))
+
+function changeDefaultProgram(val: ProgramsName) {
+  defaultPrograms.value = val
+
+  // 重置失败图片的状态
+  data.value.forEach((item, index) => {
+    if (item.uploadFailed) {
+      uploadDataStore.setData({ uploadFailed: false }, index)
+    }
+  })
+}
 // 上传方法
-async function handleUpload(index: number, file: File, isGetRecord: boolean = true) {
-  if (lskyProApi.value === '' || lskyProToken.value === '') {
-    window.$message.error('请先填写图床设置')
+async function uploadImage(index: number, file: File, isGetRecord: boolean = true) {
+  if (!defaultPrograms.value) {
+    window.$message.error('你要上传到那个存储程序呢？🤔')
     return
   }
 
-  if (lskyProStrategiesVal.value === null) {
-    window.$message.error('请先选择存储策略')
+  if (programs.value.api === '' || programs.value.token === '') {
+    window.$message.error('不配置存储程序，我怎么上传？🤔')
+    return
+  }
+
+  if (programs.value.strategiesVal === null) {
+    window.$message.error('我还不知道你要存在那个策略中啊！😓')
+    return
+  }
+
+  // 检查文件是否已经上传
+  if (data.value[index].uploaded) {
+    window.$message.info(`图片 ${index + 1} 已经上传过了，将跳过此图片。`)
     return
   }
 
   uploadDataStore.setData({ isLoading: true }, index)
 
   try {
-    const { data, status } = await requestData.uploadLskyProImage(lskyProApi.value, lskyProToken.value, {
+    const { data: responseData, status } = await requestData.uploadImage(uploadProgramsId.value, programs.value.api, programs.value.token, {
       file,
       permission: isAllPublic.value,
-      strategy_id: lskyProStrategiesVal.value,
+      strategy_id: programs.value.strategiesVal,
     })
 
     if (status !== 200) {
@@ -48,15 +72,15 @@ async function handleUpload(index: number, file: File, isGetRecord: boolean = tr
       return
     }
 
-    if (!data.status) {
-      window.$message.error(data.message)
+    if (!responseData.status) {
+      window.$message.error(responseData.message)
       uploadDataStore.setData({ uploadFailed: true }, index)
       return
     }
 
-    console.log(data.data)
+    console.log(responseData.data)
 
-    const { key, name, size, mimetype, links } = data.data
+    const { key, name, size, mimetype, links, origin_name } = responseData.data
 
     uploadDataStore.setData(
       {
@@ -65,17 +89,18 @@ async function handleUpload(index: number, file: File, isGetRecord: boolean = tr
         size,
         mimetype,
         url: links.url,
+        origin_name,
         uploadFailed: false,
         time: new Date().toISOString(),
         isPublic: isAllPublic.value,
-        strategies: lskyProStrategiesVal.value,
+        strategies: programs.value.strategiesVal,
+        uploaded: true, // 标记文件为已上传
       },
       index,
     )
-    imgLinkTabsKey.value++
     window.$message.success('上传成功')
   }
-  catch (error) {
+  catch {
     window.$message.error('上传失败')
     uploadDataStore.setData({ uploadFailed: true }, index)
   }
@@ -87,21 +112,26 @@ async function handleUpload(index: number, file: File, isGetRecord: boolean = tr
 }
 
 // 全部上传方法
-async function handleAllUpload() {
-  if (lskyProApi.value === '' || lskyProToken.value === '') {
-    window.$message.error('请先填写图床设置')
+async function allUploadImage() {
+  if (!defaultPrograms.value) {
+    window.$message.error('你要上传到那个存储程序呢？🤔')
     return
   }
 
-  if (lskyProStrategiesVal.value === null) {
-    window.$message.error('请先选择存储策略')
+  if (programs.value.api === '' || programs.value.token === '') {
+    window.$message.error('不配置存储程序，我怎么上传？🤔')
     return
   }
 
-  const uploadList = data.value.filter((item: any) => !item.links && !item.uploadFailed)
+  if (programs.value.strategiesVal === null) {
+    window.$message.error('我还不知道你要存在哪个策略中啊！😓')
+    return
+  }
+
+  const uploadList = data.value.filter((item: any) => !item.links && !item.uploadFailed && !item.uploaded)
 
   if (!uploadList.length) {
-    window.$message.info('没有需要上传的图片')
+    window.$message.info('没有需要上传的图片。')
     return
   }
 
@@ -111,7 +141,7 @@ async function handleAllUpload() {
   const uploadingTasks = new Set()
 
   const tasks = uploadList.map((item: any, index: number) => {
-    if (item.links || item.uploadFailed) {
+    if (item.links || item.uploadFailed || item.uploaded) {
       window.$message.info(`图片 ${index + 1} 已经上传过了，将跳过此图片。`)
       return null
     }
@@ -120,7 +150,7 @@ async function handleAllUpload() {
 
     // 创建一个新的上传任务
     const task = limit(() =>
-      handleUpload(originalIndex, item.fileInfo.file, false)
+      uploadImage(originalIndex, item.fileInfo.file, false)
         .then(() => {
           // 从正在进行的上传任务中移除这个任务
           uploadingTasks.delete(task)
@@ -149,7 +179,7 @@ async function handleAllUpload() {
 }
 
 // 删除图片方法
-function handleClose(index: number) {
+function delImage(index: number) {
   if (isImgListDelDialog.value) {
     uploadDataStore.delData(index)
     return
@@ -157,7 +187,7 @@ function handleClose(index: number) {
 
   const n = window.$dialog.warning({
     title: '提示',
-    content: '确定删除该图片吗？不会删除上传日志和图床中的图片。',
+    content: '确定删除该图片吗？不会删除数据库和图床中的图片。',
     autoFocus: false,
     action: () => {
       return h('div', { class: 'wh-full flex-center justify-between' }, [
@@ -207,12 +237,24 @@ function handleClose(index: number) {
 }
 
 // 清空列表方法
-function handleAllClear() {
+function allClear() {
   uploadDataStore.delData()
 }
 
+function copyLink(type: string, url: string, name: string) {
+  const link = generateLink(type, url, name)
+  navigator.clipboard
+    .writeText(link)
+    .then(() => {
+      window.$message.success('复制成功')
+    })
+    .catch(() => {
+      window.$message.error('复制失败')
+    })
+}
+
 // 复制全部URL方法
-function handleCopyAllUrl() {
+function copyAllUrl() {
   const urlList = data.value.map((item: UploadData) => item?.url).filter((item: string | undefined) => item)
 
   if (!urlList.length) {
@@ -232,85 +274,82 @@ function handleCopyAllUrl() {
     })
 }
 
-// 监听图片链接格式选项卡变化，防止渲染出现问题
-watch(imgLinkFormatVal, () => {
-  imgLinkTabsKey.value++
+const debouncedAllUploadImage = debounce(async () => {
+  if (isUpload.value) {
+    window.$message.info('上传正在进行中，请稍候...')
+    return
+  }
+  await allUploadImage()
+}, 1000)
+
+window.ipcRenderer.on('upload-shortcut', () => {
+  console.log('快捷键触发了')
+  debouncedAllUploadImage()
 })
 </script>
 
 <template>
   <template v-if="data.length">
-    <n-flex my2 ml1 wfull>
-      <NButton type="primary" :disabled="data.length <= 1 || isUpload" @click="handleAllUpload">
+    <n-flex class="my2 ml1 wfull">
+      <NButton type="primary" secondary :disabled="data.length <= 1 || isUpload" @click="allUploadImage">
         全部上传
       </NButton>
-      <NButton type="error" @click="handleAllClear">
+      <NButton type="error" secondary @click="allClear">
         清空列表
       </NButton>
-      <NButton type="info" :disabled="false" @click="handleCopyAllUrl">
+      <NButton type="info" secondary :disabled="false" @click="copyAllUrl">
         复制全部URL
       </NButton>
-      <n-select v-model:value="isAllPublic" w30 :options="isPublicOptions" />
+      <n-select v-model:value="isAllPublic" class="w30" :options="isPublicOptions" />
+      <n-select v-model:value="uploadProgramsId" class="w30" :options="selectProgramsOptions" @update:value="changeDefaultProgram" />
     </n-flex>
-    <n-flex wfull justify="space-between">
-      <n-image-group>
-        <n-card v-for="(file, index) in data" :key="index" content-style="padding: 10px;" relative not-last="mb2">
-          <n-spin :show="file.isLoading">
-            <n-flex justify="space-between">
-              <n-flex justify="center" h30 w52>
-                <n-image :src="file.fileUrl" object-fit="cover" />
+    <n-image-group>
+      <n-grid cols="3 l:5 xl:6 2xl:8" responsive="screen" :x-gap="12" :y-gap="8">
+        <n-grid-item v-for="(file, index) in data" :key="index">
+          <n-card class="relative not-last:mb2">
+            <template #header>
+              <n-ellipsis class="max-w55 text-4 font-400">
+                {{ file.fileInfo?.name }}
+              </n-ellipsis>
+              <NButton quaternary class="absolute right-.5 h5 w5" @click="delImage(index)">
+                <template #icon>
+                  <div i-ic-round-close class="h5 w5 text-dark-50" />
+                </template>
+              </NButton>
+            </template>
+            <n-spin :show="file.isLoading">
+              <n-flex justify="center" class="h50">
+                <n-image class="border-rd-sm" :src="file.fileUrl" object-fit="cover" style="image-rendering: optimizeQuality;" />
               </n-flex>
-              <template v-if="file.url">
-                <n-tabs :key="imgLinkTabsKey" flex="1 nowrap" overflow-auto type="line">
-                  <n-tab-pane
-                    v-for="linkType in imgLinkFormatVal"
-                    :key="linkType"
-                    wfull
-                    :name="linkType"
-                    :tab="getLinkType(linkType)"
-                  >
-                    <n-input v-model:value="file.url" type="text" placeholder="基本的 Input" />
-                  </n-tab-pane>
-                </n-tabs>
-              </template>
-              <template v-else>
-                <n-tabs flex="1 nowrap" overflow-auto type="line">
-                  <n-tab-pane wfull flex-1 name="file_info" tab="详情">
-                    <div wh-full flex="center row wrap" justify-between>
-                      <n-tag :bordered="false" type="info">
-                        <span block max-w-100 text-overflow>文件名： {{ file.fileInfo ? file.fileInfo.name : '无' }}</span>
-                      </n-tag>
-                      <n-tag :bordered="false" type="info">
-                        文件大小：{{ file.fileInfo ? convertFileSize(Number(file.fileInfo.file?.size)) : '无' }}
-                      </n-tag>
-                      <n-tag :bordered="false" type="info">
-                        文件类型：{{ file.fileInfo ? file.fileInfo.type : '无' }}
-                      </n-tag>
-                      <NButton
-                        size="small"
-                        secondary
-                        strong
-                        @click="file.fileInfo && file.fileInfo.file && handleUpload(index, file.fileInfo.file)"
-                      >
-                        上传
-                      </NButton>
-                    </div>
-                  </n-tab-pane>
-                </n-tabs>
-              </template>
-            </n-flex>
+            </n-spin>
             <template #description>
               正在上传，请耐心等待...
             </template>
-          </n-spin>
-          <NButton v-if="!file.isLoading" quaternary absolute right-2 top-.5 h5 w5 @click="handleClose(index)">
-            <template #icon>
-              <div i-ic-sharp-close h5 w5 text-dark-50 />
+            <template #footer>
+              <n-flex justify="center">
+                <template v-if="file && file.url && file.origin_name">
+                  <n-dropdown trigger="hover" :options="getLinkTypeOptions()" @select="(type:string) => file.url && file.origin_name && copyLink(type, file.url, file.origin_name)">
+                    <NButton secondary strong class="wfull" type="info" @click="copyLink('url', file.url, file.origin_name)">
+                      复制链接
+                    </NButton>
+                  </n-dropdown>
+                </template>
+                <template v-else>
+                  <NButton
+                    tertiary class="wfull"
+                    :disabled="file.isLoading"
+                    type="primary"
+                    @click="file.fileInfo && file.fileInfo.file && uploadImage(index, file.fileInfo.file)"
+                  >
+                    上传
+                  </NButton>
+                </template>
+              </n-flex>
             </template>
-          </NButton>
-        </n-card>
-      </n-image-group>
-    </n-flex>
+          </n-card>
+        </n-grid-item>
+      </n-grid>
+    </n-image-group>
   </template>
 </template>
 

@@ -1,5 +1,5 @@
+import type { UploadFileInfo } from 'naive-ui'
 import { defineStore } from 'pinia'
-import type { FileInfo } from 'naive-ui/es/upload/src/interface'
 
 interface State {
   data: UploadData[]
@@ -12,13 +12,15 @@ interface BaseData {
   size?: number
   mimetype?: string
   url?: string
+  origin_name?: string
 }
 
 export interface UploadData extends BaseData {
   fileUrl?: string // 文件的blob地址，用于预览
-  fileInfo?: FileInfo // 文件信息
+  fileInfo?: UploadFileInfo // 文件信息
   isLoading?: boolean // 是否正在上传
   uploadFailed?: boolean // 是否上传失败
+  uploaded?: boolean // 是否上传成功
   time?: string // 上传时间
   isPublic?: number // 是否公开
   strategies?: number // 上传策略
@@ -65,8 +67,8 @@ export const useUploadDataStore = defineStore('uploadDataStore', () => {
   function getUploadData() {
     state.data
       .filter(item => item.url && item.key)
-      .forEach(({ key, name, time, size, mimetype, url }: UploadData) => {
-        window.ipcRenderer.send('create-uploadData', JSON.stringify({ key, name, time, size, mimetype, url }))
+      .forEach(({ key, name, time, size, mimetype, url, origin_name }: UploadData) => {
+        window.ipcRenderer.invoke('insert-upload-data', JSON.stringify({ key, name, time, size, mimetype, url, origin_name }))
       })
   }
 

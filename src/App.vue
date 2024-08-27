@@ -4,11 +4,13 @@ import { routerPush } from './utils'
 
 const appStroe = useAppStore()
 const router = useRouter()
-const { isMenuCollapsed } = storeToRefs(appStroe)
+const { isMenuCollapsed, isDevToolsOpen } = storeToRefs(appStroe)
 
 // router.beforeEach((to, from, next) => {
 
 // })
+
+window.ipcRenderer.invoke('devtools', isDevToolsOpen.value)
 
 onMounted(() => {
   routerPush(router)
@@ -17,7 +19,7 @@ onMounted(() => {
 
 <template>
   <Provider>
-    <n-layout position="absolute" :class="{ height: '100%' }">
+    <n-layout position="absolute">
       <n-layout-header bordered>
         <MainNav />
       </n-layout-header>
