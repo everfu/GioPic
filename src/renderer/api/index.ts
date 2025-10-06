@@ -54,16 +54,62 @@ function getProgramAuthParams(program: Program): Record<string, any> {
 }
 
 export const apiClient = {
-  upload: async (type: ProgramType, params: Partial<LskyUploadParams>) => {
+  upload: async (type: ProgramType, params: Partial<LskyUploadParams> & { file?: File }) => {
     const program = getCurrentProgram()
     const authParams = getProgramAuthParams(program)
+
+    let filePath = params.path
+    let isTempFile = false
+
+    // 如果提供了File对象但没有路径，需要先保存为临时文件
+    if (params.file && !filePath) {
+      const arrayBuffer = await params.file.arrayBuffer()
+      const tempFileResult = await window.ipcRenderer.invoke('save-temp-file', {
+        buffer: arrayBuffer,
+        filename: params.file.name,
+      })
+
+      if (!tempFileResult.success) {
+        throw new Error(tempFileResult.message)
+      }
+
+      filePath = tempFileResult.path
+      isTempFile = true
+    }
 
     const completeParams: Record<string, any> = {
       ...JSON.parse(JSON.stringify(params)),
       ...JSON.parse(JSON.stringify(authParams)),
+      path: filePath,
     }
 
-    return await window.ipcRenderer.invoke('upload', { type, params: completeParams })
+    try {
+      const result = await window.ipcRenderer.invoke('upload', { type, params: completeParams })
+
+      // 上传完成后清理临时文件
+      if (isTempFile && filePath) {
+        try {
+          await window.ipcRenderer.invoke('cleanup-temp-file', filePath)
+        }
+        catch (cleanupError) {
+          console.warn('Failed to cleanup temporary file:', cleanupError)
+        }
+      }
+
+      return result
+    }
+    catch (error) {
+      // 上传失败也要清理临时文件
+      if (isTempFile && filePath) {
+        try {
+          await window.ipcRenderer.invoke('cleanup-temp-file', filePath)
+        }
+        catch (cleanupError) {
+          console.warn('Failed to cleanup temporary file after upload error:', cleanupError)
+        }
+      }
+      throw error
+    }
   },
 
   getStrategies: async (program?: Program) => {

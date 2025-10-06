@@ -1,5 +1,9 @@
 import type { BrowserWindow } from 'electron'
 import type { SupportedUploader } from './services/beds'
+import { Buffer } from 'node:buffer'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import { deleteUploadData, insertUploadData, queryUploadData } from './db/modules'
 import { uploaders } from './services/beds'
@@ -91,6 +95,36 @@ export function registerIpc(win: BrowserWindow, loadingWindow: BrowserWindow | n
     catch (e) {
       logger.error(`[devTools] Error setting developer tools: ${e}`)
       return Promise.resolve(false)
+    }
+  })
+
+  // ---------- 文件处理接口 ----------
+  ipcMain.handle('save-temp-file', async (_event, { buffer, filename }: { buffer: ArrayBuffer, filename: string }) => {
+    try {
+      const tempDir = await mkdtemp(join(tmpdir(), 'giopic-'))
+      const tempFilePath = join(tempDir, filename)
+      const bufferData = Buffer.from(buffer)
+
+      await writeFile(tempFilePath, bufferData)
+      logger.info(`[temp-file] Created temporary file: ${tempFilePath}`)
+      return { success: true, path: tempFilePath }
+    }
+    catch (e) {
+      logger.error(`[temp-file] Failed to create temporary file: ${e}`)
+      return { success: false, message: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('cleanup-temp-file', async (_event, filePath: string) => {
+    try {
+      const tempDir = dirname(filePath)
+      await rm(tempDir, { recursive: true, force: true })
+      logger.info(`[temp-file] Cleaned up temporary directory: ${tempDir}`)
+      return { success: true }
+    }
+    catch (e) {
+      logger.error(`[temp-file] Failed to cleanup temporary file: ${e}`)
+      return { success: false, message: (e as Error).message }
     }
   })
 

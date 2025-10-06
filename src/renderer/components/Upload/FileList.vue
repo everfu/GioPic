@@ -2,7 +2,7 @@
 import type { ProgramDetail } from '@/types'
 import { NButton, NCheckbox } from 'naive-ui'
 import pLimit from 'p-limit'
-import { apiClient } from '~/api'
+import { apiClient } from '~/api/index'
 import { useAppStore, useProgramStore, useUploadDataStore } from '~/stores'
 import debounce from '~/utils/debounce'
 import { generateLink, getLinkTypeOptions } from '~/utils/main'
@@ -80,8 +80,7 @@ async function uploadImage(index: number, file: File, isGetRecord = true) {
       ? undefined
       : isAllPublic.value
 
-    const path = file.path || ''
-    const { data: res } = await apiClient.upload(program.type, { path, permission })
+    const { data: res } = await apiClient.upload(program.type, { file, permission })
 
     uploadDataStore.setData(
       {
@@ -291,7 +290,7 @@ window.ipcRenderer.on('upload-shortcut', () => {
             <n-spin :show="file.isLoading">
               <n-image class="h50 wfull border-rd-sm" :src="file.fileUrl" object-fit="cover" style="image-rendering: optimizeQuality;" />
             </n-spin>
-            <template #description>
+            <template #action>
               <span v-if="file.isLoading">正在上传，请耐心等待...</span>
             </template>
             <template #footer>
