@@ -25,9 +25,11 @@ instance.interceptors.response.use(
     if (error.response) {
       const { config, response, message } = error
       logger.error(`[request] Failed - Method: ${config?.method}, URL: ${config?.url}, Status: ${response?.status}, Error: ${message}`)
+      return Promise.reject(error)
     }
     else {
       logger.error(`[request] Failed - Error: ${error.message}`)
+      return Promise.reject(error)
     }
   },
 )
